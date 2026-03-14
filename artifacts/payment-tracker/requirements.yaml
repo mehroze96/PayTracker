@@ -1,0 +1,13 @@
+packages:
+  "recharts": "Dashboard analytics charts and data visualization"
+  "date-fns": "Human-readable date formatting"
+  "framer-motion": "Page transitions and interactions"
+  "react-hook-form": "Form state management"
+  "@hookform/resolvers": "Zod validation for forms"
+  "zod": "Schema definition"
+  "clsx": "Class merging"
+  "tailwind-merge": "Class merging"
+
+notes:
+  - Hooks are imported from @workspace/api-client-react
+  - Using lucide-react for all icons
