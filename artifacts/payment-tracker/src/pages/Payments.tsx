@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { format } from "date-fns";
-import { Plus, Search, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import * as XLSX from "xlsx";
+import { Plus, MoreHorizontal, Pencil, Trash2, Download } from "lucide-react";
 import { Layout } from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
@@ -50,6 +50,46 @@ export default function Payments() {
 
   const formatCurrency = (val: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val);
 
+  function exportToExcel() {
+    if (!payments || payments.length === 0) return;
+
+    const rows = payments.map((p) => ({
+      "Date": format(new Date(p.paymentDate), "MM/dd/yyyy"),
+      "Client": p.clientName,
+      "Amount": p.amount,
+      "Description": p.description ?? "",
+      "Payment Method": p.paymentMethod.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
+      "Invoice Number": p.invoiceNumber ?? "",
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(rows);
+
+    // Column widths
+    worksheet["!cols"] = [
+      { wch: 14 },  // Date
+      { wch: 24 },  // Client
+      { wch: 14 },  // Amount
+      { wch: 36 },  // Description
+      { wch: 20 },  // Payment Method
+      { wch: 18 },  // Invoice Number
+    ];
+
+    // Format Amount column as currency (column C = index 2)
+    const range = XLSX.utils.decode_range(worksheet["!ref"] ?? "A1");
+    for (let row = range.s.r + 1; row <= range.e.r; row++) {
+      const cellRef = XLSX.utils.encode_cell({ r: row, c: 2 });
+      if (worksheet[cellRef]) {
+        worksheet[cellRef].z = '"$"#,##0.00';
+      }
+    }
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Payments");
+
+    const fileName = `payments-${yearFilter !== "all" ? yearFilter : "all"}-${format(new Date(), "yyyy-MM-dd")}.xlsx`;
+    XLSX.writeFile(workbook, fileName);
+  }
+
   return (
     <Layout>
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
@@ -57,7 +97,18 @@ export default function Payments() {
           <h1 className="text-3xl font-display font-bold text-foreground">Payments</h1>
           <p className="text-muted-foreground mt-1">Manage and track your received payments.</p>
         </div>
-        
+
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={exportToExcel}
+            disabled={!payments || payments.length === 0}
+            className="rounded-xl px-4 h-11 gap-2"
+          >
+            <Download className="w-4 h-4" />
+            Export Excel
+          </Button>
+
         <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
           <DialogTrigger asChild>
             <Button className="shadow-lg shadow-primary/20 rounded-xl px-5 h-11">
@@ -72,6 +123,7 @@ export default function Payments() {
             <PaymentForm onSuccess={() => setIsAddOpen(false)} />
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       <Card className="shadow-md shadow-black/5 border-border/50 mb-6 p-4">
