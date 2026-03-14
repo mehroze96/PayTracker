@@ -1,15 +1,25 @@
 import { Router, type IRouter } from "express";
 import { db, paymentsTable, clientsTable } from "@workspace/db";
 import { eq, and, sql } from "drizzle-orm";
+import { z } from "zod";
 import {
-  CreatePaymentBody,
-  UpdatePaymentBody,
   GetPaymentParams,
   UpdatePaymentParams,
   DeletePaymentParams,
   ListPaymentsQueryParams,
   GetPaymentSummaryQueryParams,
 } from "@workspace/api-zod";
+
+const paymentMethodEnum = z.enum(["cash", "check", "bank_transfer", "credit_card", "paypal", "venmo", "zelle", "other"]);
+
+const PaymentBodySchema = z.object({
+  clientId: z.number().int(),
+  amount: z.number(),
+  paymentDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be YYYY-MM-DD"),
+  description: z.string().nullable().optional(),
+  paymentMethod: paymentMethodEnum,
+  invoiceNumber: z.string().nullable().optional(),
+});
 
 const router: IRouter = Router();
 
@@ -119,7 +129,7 @@ router.get("/payments", async (req, res) => {
 });
 
 router.post("/payments", async (req, res) => {
-  const body = CreatePaymentBody.parse(req.body);
+  const body = PaymentBodySchema.parse(req.body);
   const [payment] = await db
     .insert(paymentsTable)
     .values({
@@ -173,7 +183,7 @@ router.get("/payments/:id", async (req, res) => {
 
 router.put("/payments/:id", async (req, res) => {
   const { id } = UpdatePaymentParams.parse({ id: Number(req.params.id) });
-  const body = UpdatePaymentBody.parse(req.body);
+  const body = PaymentBodySchema.parse(req.body);
 
   const [payment] = await db
     .update(paymentsTable)
