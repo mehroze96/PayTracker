@@ -7,6 +7,7 @@ export const paymentMethodEnum = ["cash", "check", "bank_transfer", "credit_card
 
 export const paymentsTable = pgTable("payments", {
   id: serial("id").primaryKey(),
+  userId: text("user_id").notNull(),
   clientId: integer("client_id").notNull().references(() => clientsTable.id),
   amount: numeric("amount", { precision: 12, scale: 2 }).notNull(),
   paymentDate: date("payment_date").notNull(),

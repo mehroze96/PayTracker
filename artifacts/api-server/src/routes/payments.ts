@@ -32,13 +32,17 @@ router.use((_req, res, next) => {
 });
 
 router.get("/payments/summary", async (req, res) => {
+  if (!req.isAuthenticated()) return;
+  const userId = req.user.id;
+
   const query = GetPaymentSummaryQueryParams.parse({
     year: req.query.year ? Number(req.query.year) : undefined,
   });
 
+  const userFilter = eq(paymentsTable.userId, userId);
   const yearFilter = query.year
-    ? sql`EXTRACT(YEAR FROM ${paymentsTable.paymentDate}) = ${query.year}`
-    : sql`1=1`;
+    ? and(userFilter, sql`EXTRACT(YEAR FROM ${paymentsTable.paymentDate}) = ${query.year}`)
+    : userFilter;
 
   const [totalRow] = await db
     .select({ total: sql<string>`COALESCE(SUM(${paymentsTable.amount}), 0)` })
@@ -90,13 +94,16 @@ router.get("/payments/summary", async (req, res) => {
 });
 
 router.get("/payments", async (req, res) => {
+  if (!req.isAuthenticated()) return;
+  const userId = req.user.id;
+
   const query = ListPaymentsQueryParams.parse({
     clientId: req.query.clientId ? Number(req.query.clientId) : undefined,
     year: req.query.year ? Number(req.query.year) : undefined,
     month: req.query.month ? Number(req.query.month) : undefined,
   });
 
-  const conditions = [];
+  const conditions = [eq(paymentsTable.userId, userId)];
   if (query.clientId) conditions.push(eq(paymentsTable.clientId, query.clientId));
   if (query.year)
     conditions.push(sql`EXTRACT(YEAR FROM ${paymentsTable.paymentDate}) = ${query.year}`);
@@ -117,7 +124,7 @@ router.get("/payments", async (req, res) => {
     })
     .from(paymentsTable)
     .innerJoin(clientsTable, eq(paymentsTable.clientId, clientsTable.id))
-    .where(conditions.length > 0 ? and(...conditions) : undefined)
+    .where(and(...conditions))
     .orderBy(sql`${paymentsTable.paymentDate} DESC`);
 
   res.json(
@@ -129,10 +136,26 @@ router.get("/payments", async (req, res) => {
 });
 
 router.post("/payments", async (req, res) => {
+  if (!req.isAuthenticated()) return;
+  const userId = req.user.id;
+
   const body = PaymentBodySchema.parse(req.body);
+
+  // Verify the client belongs to this user
+  const [clientCheck] = await db
+    .select({ id: clientsTable.id })
+    .from(clientsTable)
+    .where(and(eq(clientsTable.id, body.clientId), eq(clientsTable.userId, userId)));
+
+  if (!clientCheck) {
+    res.status(403).json({ error: "Client not found" });
+    return;
+  }
+
   const [payment] = await db
     .insert(paymentsTable)
     .values({
+      userId,
       clientId: body.clientId,
       amount: String(body.amount),
       paymentDate: body.paymentDate,
@@ -155,6 +178,9 @@ router.post("/payments", async (req, res) => {
 });
 
 router.get("/payments/:id", async (req, res) => {
+  if (!req.isAuthenticated()) return;
+  const userId = req.user.id;
+
   const { id } = GetPaymentParams.parse({ id: Number(req.params.id) });
 
   const [payment] = await db
@@ -171,7 +197,7 @@ router.get("/payments/:id", async (req, res) => {
     })
     .from(paymentsTable)
     .innerJoin(clientsTable, eq(paymentsTable.clientId, clientsTable.id))
-    .where(eq(paymentsTable.id, id));
+    .where(and(eq(paymentsTable.id, id), eq(paymentsTable.userId, userId)));
 
   if (!payment) {
     res.status(404).json({ error: "Payment not found" });
@@ -182,8 +208,22 @@ router.get("/payments/:id", async (req, res) => {
 });
 
 router.put("/payments/:id", async (req, res) => {
+  if (!req.isAuthenticated()) return;
+  const userId = req.user.id;
+
   const { id } = UpdatePaymentParams.parse({ id: Number(req.params.id) });
   const body = PaymentBodySchema.parse(req.body);
+
+  // Verify the client belongs to this user
+  const [clientCheck] = await db
+    .select({ id: clientsTable.id })
+    .from(clientsTable)
+    .where(and(eq(clientsTable.id, body.clientId), eq(clientsTable.userId, userId)));
+
+  if (!clientCheck) {
+    res.status(403).json({ error: "Client not found" });
+    return;
+  }
 
   const [payment] = await db
     .update(paymentsTable)
@@ -195,7 +235,7 @@ router.put("/payments/:id", async (req, res) => {
       paymentMethod: body.paymentMethod,
       invoiceNumber: body.invoiceNumber ?? null,
     })
-    .where(eq(paymentsTable.id, id))
+    .where(and(eq(paymentsTable.id, id), eq(paymentsTable.userId, userId)))
     .returning();
 
   if (!payment) {
@@ -216,10 +256,13 @@ router.put("/payments/:id", async (req, res) => {
 });
 
 router.delete("/payments/:id", async (req, res) => {
+  if (!req.isAuthenticated()) return;
+  const userId = req.user.id;
+
   const { id } = DeletePaymentParams.parse({ id: Number(req.params.id) });
   const [deleted] = await db
     .delete(paymentsTable)
-    .where(eq(paymentsTable.id, id))
+    .where(and(eq(paymentsTable.id, id), eq(paymentsTable.userId, userId)))
     .returning();
 
   if (!deleted) {
