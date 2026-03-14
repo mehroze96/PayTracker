@@ -13,6 +13,14 @@ import {
 
 const router: IRouter = Router();
 
+router.use((_req, res, next) => {
+  if (!_req.isAuthenticated()) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  next();
+});
+
 router.get("/payments/summary", async (req, res) => {
   const query = GetPaymentSummaryQueryParams.parse({
     year: req.query.year ? Number(req.query.year) : undefined,

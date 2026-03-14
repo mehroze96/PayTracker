@@ -5,6 +5,14 @@ import { CreateClientBody, DeleteClientParams } from "@workspace/api-zod";
 
 const router: IRouter = Router();
 
+router.use((_req, res, next) => {
+  if (!_req.isAuthenticated()) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  next();
+});
+
 router.get("/clients", async (_req, res) => {
   const clients = await db
     .select()
