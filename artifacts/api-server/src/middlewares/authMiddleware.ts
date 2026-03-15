@@ -10,18 +10,17 @@ import {
   type SessionData,
 } from "../lib/auth";
 
+export interface AuthedRequest extends Request {
+  user: AuthUser;
+}
+
 declare global {
   namespace Express {
     interface User extends AuthUser {}
 
     interface Request {
       isAuthenticated(): this is AuthedRequest;
-
-      user?: User | undefined;
-    }
-
-    export interface AuthedRequest {
-      user: User;
+      user?: User;
     }
   }
 }
@@ -41,11 +40,13 @@ async function refreshIfExpired(
       config,
       session.refresh_token,
     );
+
     session.access_token = tokens.access_token;
     session.refresh_token = tokens.refresh_token ?? session.refresh_token;
     session.expires_at = tokens.expiresIn()
       ? now + tokens.expiresIn()!
       : session.expires_at;
+
     await updateSession(sid, session);
     return session;
   } catch {
@@ -58,9 +59,9 @@ export async function authMiddleware(
   res: Response,
   next: NextFunction,
 ) {
-  req.isAuthenticated = function (this: Request) {
+  req.isAuthenticated = function () {
     return this.user != null;
-  } as Request["isAuthenticated"];
+  };
 
   const sid = getSessionId(req);
   if (!sid) {
